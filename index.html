@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#171715" />
+  <meta name="description" content="Painel de pedidos LOS HERMANOS Lanches" />
+  <title>LOS HERMANOS — Painel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="#inicio" aria-label="LOS HERMANOS início">
+      <span class="brand-mark"><img src="assets/logo.png" alt="" /></span>
+      <span class="brand-copy"><strong>LOS HERMANOS</strong><small>LANCHES · PAINEL</small></span>
+    </a>
+    <div class="sidebar-label">OPERAÇÃO</div>
+    <nav class="nav" aria-label="Navegação principal">
+      <button class="nav-item active" data-view="pedidos"><span class="nav-icon">▦</span> Pedidos <span class="nav-count" id="nav-count">4</span></button>
+      <button class="nav-item" data-view="cardapio"><span class="nav-icon">▤</span> Cardápio</button>
+      <button class="nav-item" data-view="estoque"><span class="nav-icon">▧</span> Estoque</button>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="db-status"><span class="status-dot"></span><div><strong>Modo demonstração</strong><small>Banco ainda não conectado</small></div></div>
+      <div class="profile"><div class="avatar">LH</div><div><strong>LOS HERMANOS</strong><small>Administrador</small></div><span class="profile-more">···</span></div>
+    </div>
+  </aside>
+  <main class="main" id="inicio">
+    <header class="topbar"><button class="mobile-menu" id="mobile-menu" aria-label="Abrir menu">☰</button><div class="breadcrumb">Painel <span>/</span> <b id="crumb">Pedidos</b></div><div class="top-actions"><span class="today" id="today"></span><button class="icon-button" aria-label="Notificações">♧<i></i></button><div class="top-avatar">LH</div></div></header>
+    <div class="demo-banner"><span class="banner-mark">!</span><span><strong>Prévia do painel</strong> — pedidos e indicadores são fictícios. Os dados só serão salvos após conectar o Supabase.</span><button id="dismiss-banner" aria-label="Fechar aviso">×</button></div>
+    <section class="page-heading"><div><div class="eyebrow">QUINTA-FEIRA · OPERAÇÃO</div><h1 id="page-title">Pedidos <span class="yellow-period">.</span></h1><p id="page-subtitle">Acompanhe a fila e mantenha a chapa no ritmo.</p></div><button class="primary-button" id="new-order"><span>＋</span> Novo pedido</button></section>
+    <section class="metrics" aria-label="Resumo do dia">
+      <article class="metric-card"><div class="metric-top"><span>Pedidos de hoje</span><span class="metric-icon yellow-icon">▦</span></div><div class="metric-value">24 <span class="metric-change">↑ 12%</span></div><div class="metric-note">em relação a ontem</div><div class="sparkline"><i style="height:32%"></i><i style="height:50%"></i><i style="height:42%"></i><i style="height:63%"></i><i style="height:48%"></i><i style="height:78%"></i><i style="height:100%"></i></div></article>
+      <article class="metric-card"><div class="metric-top"><span>Em preparo</span><span class="metric-icon orange-icon">◷</span></div><div class="metric-value">3</div><div class="metric-note">1 pedido aguardando</div><div class="mini-progress"><span style="width:63%"></span></div><div class="progress-label"><span>Capacidade da cozinha</span><b>63%</b></div></article>
+      <article class="metric-card"><div class="metric-top"><span>Vendas do dia</span><span class="metric-icon green-icon">R$</span></div><div class="metric-value">R$ 486<span class="decimal">,00</span></div><div class="metric-note"><span class="green-text">↑ 8,4%</span> em relação a ontem</div><div class="sales-bars"><i style="height:34%"></i><i style="height:55%"></i><i style="height:45%"></i><i style="height:72%"></i><i style="height:48%"></i><i style="height:90%"></i><i style="height:70%"></i><i style="height:100%"></i><i style="height:65%"></i><i style="height:83%"></i><i style="height:62%"></i><i style="height:93%"></i></div></article>
+      <article class="metric-card"><div class="metric-top"><span>Tempo médio</span><span class="metric-icon blue-icon">◴</span></div><div class="metric-value">28 <span class="unit">min</span></div><div class="metric-note"><span class="green-text">↓ 4 min</span> em relação a ontem</div><div class="time-track"><span></span></div><div class="time-labels"><span>0 min</span><span>meta 30 min</span><span>60 min</span></div></article>
+    </section>
+    <section class="orders-panel" id="orders-panel">
+      <div class="panel-head"><div><h2>Fila de pedidos <span class="live-dot"></span></h2><p>Pedidos recebidos hoje, em tempo real</p></div><button class="filter-button" id="filter-button">☷ <span>Filtrar</span> <span class="chevron">⌄</span></button></div>
+      <div class="tabs" role="tablist"><button class="tab selected" data-filter="todos">Todos <span>4</span></button><button class="tab" data-filter="aguardando">Aguardando <span>1</span></button><button class="tab" data-filter="preparo">Em preparo <span>2</span></button><button class="tab" data-filter="pronto">Prontos <span>1</span></button></div>
+      <div class="order-list" id="order-list"></div>
+      <div class="panel-footer"><span>Exibindo <b id="visible-count">4</b> pedidos</span><button class="text-button" id="show-all">Ver todos os pedidos <span>→</span></button></div>
+    </section>
+    <footer class="footer"><span>LOS HERMANOS <b>·</b> FEITO PARA A CORRERIA</span><span>PAINEL DE OPERAÇÃO <i></i> VERSÃO 0.1</span></footer>
+  </main>
+  <div class="toast" id="toast" role="status"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
