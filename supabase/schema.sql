@@ -38,23 +38,32 @@ create table if not exists public.ingredients (
   updated_at timestamptz not null default now()
 );
 
--- Enables anonymous browser access for the initial single-shop pilot.
--- Do not put sensitive customer data in this database until auth/RLS policies are added.
+-- Admin-only access. Public visitors (anon role) receive no table policies.
+-- Configure Supabase Auth users before using the dashboard.
 alter table public.products enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.ingredients enable row level security;
 
-create policy "pilot public products read" on public.products for select to anon using (true);
-create policy "pilot public products add" on public.products for insert to anon with check (true);
-create policy "pilot public orders read" on public.orders for select to anon using (true);
-create policy "pilot public orders add" on public.orders for insert to anon with check (true);
-create policy "pilot public orders update" on public.orders for update to anon using (true) with check (true);
-create policy "pilot public order items read" on public.order_items for select to anon using (true);
-create policy "pilot public order items add" on public.order_items for insert to anon with check (true);
-create policy "pilot public ingredients read" on public.ingredients for select to anon using (true);
-create policy "pilot public ingredients add" on public.ingredients for insert to anon with check (true);
-create policy "pilot public ingredients update" on public.ingredients for update to anon using (true) with check (true);
+drop policy if exists "pilot public products read" on public.products;
+drop policy if exists "pilot public products add" on public.products;
+drop policy if exists "pilot public orders read" on public.orders;
+drop policy if exists "pilot public orders add" on public.orders;
+drop policy if exists "pilot public orders update" on public.orders;
+drop policy if exists "pilot public order items read" on public.order_items;
+drop policy if exists "pilot public order items add" on public.order_items;
+drop policy if exists "pilot public ingredients read" on public.ingredients;
+drop policy if exists "pilot public ingredients add" on public.ingredients;
+drop policy if exists "pilot public ingredients update" on public.ingredients;
+
+do $$ declare t text; begin
+  foreach t in array array['products','orders','order_items','ingredients'] loop
+    execute format('drop policy if exists "authenticated admin access" on public.%I',t);
+    execute format('create policy "authenticated admin access" on public.%I for all to authenticated using (auth.uid() is not null) with check (auth.uid() is not null)',t);
+    execute format('revoke all on public.%I from anon',t);
+    execute format('grant select, insert, update, delete on public.%I to authenticated',t);
+  end loop;
+end $$;
 
 insert into public.products(name,price_cents) values
  ('Misto Quente',1000),('Hambúrguer',1200),('Americano',1300),('X-Burguer',1400),

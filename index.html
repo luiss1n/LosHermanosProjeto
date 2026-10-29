@@ -12,6 +12,21 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <section class="auth-screen" id="auth-screen" aria-labelledby="auth-title" hidden>
+    <form class="auth-card" id="login-form">
+      <span class="auth-logo"><img src="assets/logo.png" alt="LOS HERMANOS" /></span>
+      <p class="eyebrow">ACESSO RESTRITO</p>
+      <h1 id="auth-title">Entrar no painel<span class="yellow-period">.</span></h1>
+      <p class="auth-description">Use a conta de administrador cadastrada no Supabase.</p>
+      <label for="login-email">E-mail</label>
+      <input id="login-email" name="email" type="email" autocomplete="username" required />
+      <label for="login-password">Senha</label>
+      <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+      <p class="auth-error" id="auth-error" role="alert" hidden></p>
+      <button class="primary-button auth-submit" type="submit">Entrar</button>
+      <p class="auth-hint" id="auth-hint" hidden>Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no ambiente.</p>
+    </form>
+  </section>
   <aside class="sidebar" id="sidebar">
     <a class="brand" href="#inicio" aria-label="LOS HERMANOS início">
       <span class="brand-mark"><img src="assets/logo.png" alt="" /></span>
@@ -24,8 +39,8 @@
       <button class="nav-item" data-view="estoque"><span class="nav-icon">▧</span> Estoque</button>
     </nav>
     <div class="sidebar-bottom">
-      <div class="db-status"><span class="status-dot"></span><div><strong>Modo demonstração</strong><small>Banco ainda não conectado</small></div></div>
-      <div class="profile"><div class="avatar">LH</div><div><strong>LOS HERMANOS</strong><small>Administrador</small></div><span class="profile-more">···</span></div>
+      <div class="db-status"><span class="status-dot"></span><div><strong id="connection-title">Conectando</strong><small id="connection-detail">Verificando sessão</small></div></div>
+      <div class="profile"><div class="avatar">LH</div><div class="profile-copy"><strong>LOS HERMANOS</strong><small id="profile-email">Administrador</small></div><button class="sign-out" id="sign-out" type="button">Sair</button></div>
     </div>
   </aside>
   <main class="main" id="inicio">
