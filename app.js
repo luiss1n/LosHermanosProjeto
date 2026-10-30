@@ -1,49 +1,323 @@
-import { supabase, fetchProducts } from './data.js';
+import {
+  supabase,
+  fetchProducts,
+  fetchOrders,
+  fetchIngredients,
+  createIngredient,
+  updateIngredientStock,
+} from './data.js';
 
-let orders = [
-  {id:'#024',name:'Mariana Costa',initials:'MC',source:'WhatsApp',items:'2× X-Bacon Cheddar · 1× Coca-Cola 2L',details:'Sem cebola · Ponto bem passado',total:'R$ 56,00',time:'14:32',minutes:'12 min',status:'preparo',label:'Em preparo',action:'Marcar pronto'},
-  {id:'#023',name:'Rafael Mendes',initials:'RM',source:'Balcão',items:'1× X-Tudo · 1× X-Frango',details:'Retirada no balcão',total:'R$ 42,00',time:'14:28',minutes:'16 min',status:'preparo',label:'Em preparo',action:'Marcar pronto'},
-  {id:'#022',name:'Camila Oliveira',initials:'CO',source:'WhatsApp',items:'1× X-Salada · 1× Fanta Laranja',details:'Entrega · Rua das Flores, 120',total:'R$ 21,00',time:'14:24',minutes:'20 min',status:'aguardando',label:'Aguardando',action:'Iniciar preparo'},
-  {id:'#021',name:'João Pedro',initials:'JP',source:'Balcão',items:'2× Misto Quente · 1× Suco de laranja',details:'Retirada no balcão',total:'R$ 32,00',time:'14:10',minutes:'Pronto há 2 min',status:'pronto',label:'Pronto',action:'Concluir'}
-];
+const state = {
+  orders: [],
+  products: [],
+  ingredients: [],
+  activeView: 'pedidos',
+  authRequest: 0,
+  toastTimer: undefined,
+};
 
-const list=document.querySelector('#order-list');
-let activeFilter='todos';
-let toastTimer;
-let menu=[];
-let menuLoading=false;
-let menuError='';
-let authRequest=0;
-const money=n=>'R$ '+(n/100).toFixed(2).replace('.',',');
+const $ = (selector) => document.querySelector(selector);
+const escapeHtml = (value) => {
+  const element = document.createElement('span');
+  element.textContent = String(value ?? '');
+  return element.innerHTML;
+};
 
-function showToast(message){const t=document.querySelector('#toast');t.textContent=message;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2600)}
-function renderOrders(){let filtered=orders.filter(o=>activeFilter==='todos'||o.status===activeFilter);document.querySelector('#visible-count').textContent=filtered.length;document.querySelector('#nav-count').textContent=orders.length;list.innerHTML=filtered.length?filtered.map(o=>`<article class="order-card"><div class="order-avatar">${o.initials}</div><div class="customer"><strong>${o.name}</strong><small>${o.id} · ${o.source}<em>${o.source==='WhatsApp'?'◉':'▣'} ${o.source}</em></small></div><div class="order-items"><strong>${o.items}</strong><small>${o.details}</small></div><div class="order-total">${o.total}</div><div class="order-time"><span class="time-icon">◷</span>${o.time} · ${o.minutes}</div><span class="status ${o.status}">${o.status==='aguardando'?'◷':o.status==='preparo'?'◌':'✓'} &nbsp;${o.label}</span><div class="order-actions"><button class="small-action" data-order="${o.id}">${o.action}</button><button class="more-action" aria-label="Mais opções">···</button></div></article>`).join(''):'<div class="empty-state">Nenhum pedido nesta etapa.</div>';list.querySelectorAll('[data-order]').forEach(button=>button.addEventListener('click',()=>advanceOrder(button.dataset.order)));document.querySelectorAll('.tab').forEach(t=>{const key=t.dataset.filter;const count=key==='todos'?orders.length:orders.filter(o=>o.status===key).length;t.querySelector('span').textContent=count})}
-function advanceOrder(id){const o=orders.find(x=>x.id===id);if(!o)return;if(o.status==='aguardando'){o.status='preparo';o.label='Em preparo';o.action='Marcar pronto';showToast(`Pedido ${id} iniciado na cozinha.`)}else if(o.status==='preparo'){o.status='pronto';o.label='Pronto';o.action='Concluir';o.minutes='Pronto agora';showToast(`Pedido ${id} marcado como pronto.`)}else{orders.splice(orders.indexOf(o),1);showToast(`Pedido ${id} concluído.`)}renderOrders()}
+function showToast(message) {
+  const toast = $('#toast');
+  toast.textContent = message;
+  toast.classList.add('show');
+  clearTimeout(state.toastTimer);
+  state.toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
 
-function renderMenu(){
-  const section=document.createElement('section');
-  section.className='section-placeholder';
-  const contents=menuLoading?'<div class="empty-state">Carregando produtos…</div>':menuError?`<div class="empty-state">${escapeHtml(menuError)}</div>`:menu.length?menu.map((product,i)=>`<div class="menu-item"><span class="menu-number">${String(i+1).padStart(2,'0')}</span><strong>${escapeHtml(product.name)}</strong><b>${money(product.price_cents)}</b></div>`).join(''):'<div class="empty-state">Nenhum produto ativo cadastrado.</div>';
-  section.innerHTML=`<h2>Cardápio cadastrado <span class="live-dot"></span></h2><p>Produtos ativos carregados do Supabase.</p><div class="menu-grid">${contents}</div>`;
+function formatDate(value) {
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+}
+
+function renderOrders() {
+  const list = $('#order-list');
+  $('#nav-count').textContent = state.orders.length;
+  $('#visible-count').textContent = state.orders.length;
+
+  if (!state.orders.length) {
+    list.innerHTML = '<div class="empty-state">Nenhum pedido cadastrado.</div>';
+    return;
+  }
+
+  const statusLabels = {
+    aguardando: 'Aguardando',
+    preparo: 'Em preparo',
+    pronto: 'Pronto',
+    concluido: 'Concluído',
+    cancelado: 'Cancelado',
+  };
+
+  list.innerHTML = state.orders.map((order) => {
+    const source = order.source === 'whatsapp' ? 'WhatsApp' : 'Balcão';
+    const status = statusLabels[order.status] || order.status;
+    return `<article class="order-card real-order">
+      <div class="order-avatar">${escapeHtml(order.order_number ?? '—')}</div>
+      <div class="customer"><strong>${escapeHtml(order.customer_name)}</strong><small>#${escapeHtml(order.order_number ?? '')} · ${source}</small></div>
+      <div class="order-items"><strong>${escapeHtml(order.notes || 'Sem observações')}</strong><small>${formatDate(order.created_at)}</small></div>
+      <span class="status ${escapeHtml(order.status)}">${escapeHtml(status)}</span>
+    </article>`;
+  }).join('');
+}
+
+function renderProducts() {
+  const section = document.createElement('section');
+  section.className = 'section-placeholder';
+  const content = state.products.length
+    ? state.products.map((product, index) => `<div class="menu-item">
+        <span class="menu-number">${String(index + 1).padStart(2, '0')}</span>
+        <strong>${escapeHtml(product.name)}</strong>
+        <b>${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.price_cents / 100)}</b>
+      </div>`).join('')
+    : '<div class="empty-state">Nenhum produto ativo cadastrado.</div>';
+  section.innerHTML = `<h2>Cardápio</h2><p>Produtos ativos cadastrados no Supabase.</p><div class="menu-grid">${content}</div>`;
   return section;
 }
-function escapeHtml(value){const element=document.createElement('span');element.textContent=value;return element.innerHTML}
-function setView(view){document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===view));const titles={pedidos:['Pedidos','Acompanhe a fila e mantenha a chapa no ritmo.'],cardapio:['Cardápio','Produtos e valores registrados para o piloto.'],estoque:['Estoque','Controle de ingredientes e disponibilidade.']};document.querySelector('#crumb').textContent=titles[view][0];document.querySelector('#page-title').innerHTML=`${titles[view][0]} <span class="yellow-period">.</span>`;document.querySelector('#page-subtitle').textContent=titles[view][1];const panel=document.querySelector('#orders-panel');const oldSection=document.querySelector('.section-placeholder');if(oldSection)oldSection.remove();if(view==='pedidos'){panel.style.display='';renderOrders()}else{panel.style.display='none';let section;if(view==='cardapio'){section=renderMenu()}else{section=document.createElement('section');section.className='section-placeholder';section.innerHTML='<h2>Ingredientes</h2><p>O estoque ainda não foi configurado. Depois de conectar o Supabase, você poderá cadastrar ingredientes, unidades e quantidades por receita. A baixa automática depende de confirmar as receitas de cada lanche.</p><button class="primary-button stock-cta" id="stock-cta">＋ Cadastrar ingrediente</button>'}panel.after(section);const cta=document.querySelector('#stock-cta');if(cta)cta.onclick=()=>showToast('Cadastro disponível após a conexão do banco.')}}
 
-function showAuth(){authRequest++;document.querySelector('#auth-screen').hidden=false;document.querySelector('#sidebar').hidden=true;document.querySelector('.main').hidden=true;document.querySelector('#auth-hint').hidden=Boolean(supabase);if(!supabase){document.querySelector('#connection-title').textContent='Supabase não configurado';document.querySelector('#connection-detail').textContent='Configure as variáveis de ambiente'}requestAnimationFrame(()=>document.querySelector('#login-email').focus())}
-function showDashboard(user){document.querySelector('#auth-screen').hidden=true;document.querySelector('#sidebar').hidden=false;document.querySelector('.main').hidden=false;document.querySelector('#profile-email').textContent=user.email||'Administrador';document.querySelector('#connection-title').textContent='Sessão autenticada';document.querySelector('#connection-detail').textContent='Supabase conectado';}
-function setAuthError(message){const error=document.querySelector('#auth-error');error.textContent=message;error.hidden=false}
-async function loadMenu(){menuLoading=true;menuError='';if(document.querySelector('.nav-item.active')?.dataset.view==='cardapio')setView('cardapio');const {data,error}=await fetchProducts();menuLoading=false;if(error){document.querySelector('#connection-title').textContent='Falha na conexão';document.querySelector('#connection-detail').textContent='Não foi possível ler o cardápio';menu=[];menuError='Não foi possível carregar o cardápio. Verifique a conexão e as permissões do Supabase.';if(document.querySelector('.nav-item.active')?.dataset.view==='cardapio')setView('cardapio');showToast('Não foi possível carregar os produtos do Supabase.');return}menuError='';menu=data||[];if(document.querySelector('.nav-item.active')?.dataset.view==='cardapio')setView('cardapio')}
+function renderIngredients() {
+  const list = $('#ingredient-list');
+  if (!state.ingredients.length) {
+    list.innerHTML = '<tr><td class="table-empty" colspan="3">Nenhum ingrediente cadastrado. Adicione os ingredientes e informe a quantidade disponível.</td></tr>';
+    return;
+  }
 
-document.querySelector('#login-form').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget;const button=form.querySelector('button[type="submit"]');const error=document.querySelector('#auth-error');error.hidden=true;if(!supabase){setAuthError('Supabase não configurado.');return}const request=++authRequest;button.disabled=true;button.textContent='Entrando…';try{const {data,error:loginError}=await supabase.auth.signInWithPassword({email:form.elements.email.value.trim(),password:form.elements.password.value});if(request!==authRequest)return;if(loginError){setAuthError('Não foi possível entrar. Confira o e-mail e a senha.');return}showDashboard(data.user);await loadMenu()}catch{if(request===authRequest)setAuthError('Não foi possível conectar ao Supabase. Tente novamente.')}finally{if(request===authRequest){button.disabled=false;button.textContent='Entrar'}}});
-document.querySelector('#sign-out').addEventListener('click',async()=>{if(!supabase)return;try{const {error}=await supabase.auth.signOut();if(error){showToast('Não foi possível encerrar a sessão.');return}showAuth()}catch{showToast('Não foi possível conectar ao Supabase para encerrar a sessão.')}});
-document.querySelectorAll('.nav-item').forEach(b=>b.addEventListener('click',()=>{setView(b.dataset.view);document.querySelector('#sidebar').classList.remove('open')}));document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(t=>t.classList.remove('selected'));b.classList.add('selected');activeFilter=b.dataset.filter;renderOrders()}));document.querySelector('#new-order').addEventListener('click',()=>showToast('Cadastro de pedidos ainda não está conectado ao banco.'));document.querySelector('#filter-button').addEventListener('click',()=>showToast('Escolha uma etapa nos filtros acima.'));document.querySelector('#show-all').addEventListener('click',()=>{activeFilter='todos';document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('selected',t.dataset.filter==='todos'));renderOrders()});document.querySelector('#dismiss-banner').addEventListener('click',()=>document.querySelector('.demo-banner').remove());document.querySelector('#mobile-menu').addEventListener('click',()=>document.querySelector('#sidebar').classList.toggle('open'));document.querySelector('#today').textContent=new Intl.DateTimeFormat('pt-BR',{weekday:'short',day:'numeric',month:'short'}).format(new Date());
+  list.innerHTML = state.ingredients.map((ingredient) => {
+    const id = escapeHtml(ingredient.id);
+    const name = escapeHtml(ingredient.name);
+    const unit = escapeHtml(ingredient.unit);
+    return `<tr>
+      <td><strong>${name}</strong></td>
+      <td>${unit}</td>
+      <td><form class="stock-update-form" data-ingredient="${id}">
+        <label class="sr-only" for="stock-${id}">Quantidade disponível de ${name}</label>
+        <input id="stock-${id}" name="stock_quantity" type="number" min="0" step="0.001" required value="${Number(ingredient.stock_quantity)}" />
+        <span>${unit}</span>
+        <button class="secondary-button" type="submit">Atualizar</button>
+      </form></td>
+    </tr>`;
+  }).join('');
+}
 
-if(supabase){
-  supabase.auth.onAuthStateChange((_event,session)=>{
-    if(session){showDashboard(session.user);loadMenu()}else showAuth();
+function showView(view) {
+  state.activeView = view;
+  const titles = {
+    pedidos: ['Pedidos', 'Pedidos registrados no sistema.'],
+    cardapio: ['Cardápio', 'Produtos cadastrados no Supabase.'],
+    estoque: ['Estoque', 'Quantidade disponível de cada ingrediente.'],
+  };
+  document.querySelectorAll('.nav-item').forEach((button) => {
+    button.classList.toggle('active', button.dataset.view === view);
   });
-  const {data:{session}}=await supabase.auth.getSession();
-  if(session){showDashboard(session.user);await loadMenu()}else showAuth();
-}else{showAuth()}
+  $('#crumb').textContent = titles[view][0];
+  $('#page-title').innerHTML = `${titles[view][0]} <span class="yellow-period">.</span>`;
+  $('#page-subtitle').textContent = titles[view][1];
+  $('#orders-panel').hidden = view !== 'pedidos';
+  $('#stock-panel').hidden = view !== 'estoque';
+
+  const previous = $('.section-placeholder');
+  if (previous) previous.remove();
+  if (view === 'cardapio') $('#orders-panel').after(renderProducts());
+  if (view === 'estoque') renderIngredients();
+  $('#sidebar').classList.remove('open');
+}
+
+function showAuth() {
+  state.authRequest += 1;
+  $('#auth-screen').hidden = false;
+  $('#sidebar').hidden = true;
+  $('.main').hidden = true;
+  $('#auth-hint').hidden = Boolean(supabase);
+  requestAnimationFrame(() => $('#login-email').focus());
+}
+
+function showDashboard(user) {
+  $('#auth-screen').hidden = true;
+  $('#sidebar').hidden = false;
+  $('.main').hidden = false;
+  $('#profile-email').textContent = user.email || 'Administrador';
+  $('#connection-title').textContent = 'Sessão autenticada';
+  $('#connection-detail').textContent = 'Supabase conectado';
+}
+
+async function refreshOrders() {
+  try {
+    const { data, error } = await fetchOrders();
+    if (error) throw error;
+    state.orders = data || [];
+    renderOrders();
+  } catch {
+    $('#order-list').innerHTML = '<div class="empty-state">Não foi possível carregar os pedidos. Verifique a conexão e as permissões do Supabase.</div>';
+    showToast('Falha ao carregar pedidos.');
+  }
+}
+
+async function refreshProducts() {
+  try {
+    const { data, error } = await fetchProducts();
+    if (error) throw error;
+    state.products = data || [];
+    if (state.activeView === 'cardapio') showView('cardapio');
+  } catch {
+    state.products = [];
+    showToast('Falha ao carregar o cardápio.');
+  }
+}
+
+async function refreshIngredients() {
+  try {
+    const { data, error } = await fetchIngredients();
+    if (error) throw error;
+    state.ingredients = data || [];
+    if (state.activeView === 'estoque') renderIngredients();
+  } catch {
+    $('#ingredient-list').innerHTML = '<tr><td class="table-empty" colspan="3">Não foi possível carregar o estoque. Verifique a conexão e as permissões do Supabase.</td></tr>';
+    showToast('Falha ao carregar o estoque.');
+  }
+}
+
+async function refreshDashboardData() {
+  await Promise.all([refreshOrders(), refreshProducts(), refreshIngredients()]);
+}
+
+$('#login-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = $('#auth-error');
+  const button = form.querySelector('[type="submit"]');
+  error.hidden = true;
+  if (!supabase) {
+    error.textContent = 'Supabase não configurado.';
+    error.hidden = false;
+    return;
+  }
+
+  const request = ++state.authRequest;
+  button.textContent = 'Entrando…';
+  try {
+    const { data, error: loginError } = await supabase.auth.signInWithPassword({
+      email: form.elements.email.value.trim(),
+      password: form.elements.password.value,
+    });
+    if (request !== state.authRequest) return;
+    if (loginError) {
+      error.textContent = 'Não foi possível entrar. Confira o e-mail e a senha.';
+      error.hidden = false;
+      return;
+    }
+    showDashboard(data.user);
+  } catch {
+    if (request === state.authRequest) {
+      error.textContent = 'Não foi possível conectar ao Supabase. Tente novamente.';
+      error.hidden = false;
+    }
+  } finally {
+    if (request === state.authRequest) button.textContent = 'Entrar';
+  }
+});
+
+$('#sign-out').addEventListener('click', async () => {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      showToast('Não foi possível encerrar a sessão.');
+      return;
+    }
+    showAuth();
+  } catch {
+    showToast('Não foi possível conectar ao Supabase para encerrar a sessão.');
+  }
+});
+
+$('#ingredient-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (form.dataset.loading === 'true') return;
+  const formData = new FormData(form);
+  const name = String(formData.get('name')).trim();
+  const unit = String(formData.get('unit')).trim();
+  const stockQuantity = Number(formData.get('stock_quantity'));
+  if (!name || !unit || !Number.isFinite(stockQuantity) || stockQuantity < 0) {
+    $('#ingredient-feedback').textContent = 'Informe o nome, a unidade e uma quantidade igual ou maior que zero.';
+    return;
+  }
+
+  form.dataset.loading = 'true';
+  $('#ingredient-feedback').textContent = '';
+  let error;
+  try {
+    ({ error } = await createIngredient({ name, unit, stock_quantity: stockQuantity }));
+  } catch {
+    error = new Error('Falha de conexão');
+  } finally {
+    form.dataset.loading = 'false';
+  }
+  if (error) {
+    $('#ingredient-feedback').textContent = error.code === '23505'
+      ? 'Esse ingrediente já está cadastrado. Atualize a quantidade na lista.'
+      : 'Não foi possível cadastrar o ingrediente. Confira os dados e tente novamente.';
+    return;
+  }
+  form.reset();
+  await refreshIngredients();
+  showToast('Ingrediente cadastrado.');
+});
+
+$('#ingredient-list').addEventListener('submit', async (event) => {
+  const form = event.target.closest('.stock-update-form');
+  if (!form) return;
+  event.preventDefault();
+  if (form.dataset.loading === 'true') return;
+  const quantity = Number(new FormData(form).get('stock_quantity'));
+  if (!Number.isFinite(quantity) || quantity < 0) return;
+  form.dataset.loading = 'true';
+  let error;
+  try {
+    ({ error } = await updateIngredientStock(form.dataset.ingredient, quantity));
+  } catch {
+    error = new Error('Falha de conexão');
+  } finally {
+    form.dataset.loading = 'false';
+  }
+  if (error) {
+    showToast('Não foi possível atualizar a quantidade.');
+    return;
+  }
+  await refreshIngredients();
+  showToast('Quantidade disponível atualizada.');
+});
+
+document.querySelectorAll('.nav-item').forEach((button) => {
+  button.addEventListener('click', () => showView(button.dataset.view));
+});
+$('#mobile-menu').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
+$('#today').textContent = new Intl.DateTimeFormat('pt-BR', {
+  weekday: 'short', day: 'numeric', month: 'short',
+}).format(new Date());
+
+if (supabase) {
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (session && event === 'SIGNED_IN') {
+      showDashboard(session.user);
+      refreshDashboardData();
+    } else if (!session) {
+      showAuth();
+    }
+  });
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    showDashboard(session.user);
+    await refreshDashboardData();
+  } else {
+    showAuth();
+  }
+} else {
+  showAuth();
+}
+
 renderOrders();

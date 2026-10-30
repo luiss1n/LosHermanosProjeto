@@ -4,7 +4,7 @@
 
 O LOS HERMANOS é um painel web para apoiar a operação de pequenas lanchonetes. A proposta é reunir em um único sistema o acompanhamento de pedidos, o cardápio, as vendas e o controle de estoque. Em etapas futuras, o projeto poderá integrar canais de atendimento, como o WhatsApp, para registrar pedidos e enviar atualizações aos clientes e entregadores.
 
-O repositório contém a primeira versão da interface operacional e a base de integração com o Supabase. O acesso ao painel é protegido pelo Supabase Auth. No momento, a leitura dos produtos ativos do cardápio está conectada ao banco; pedidos, métricas e estoque ainda são demonstrações e não devem ser usados como registros reais.
+O repositório contém a primeira versão da interface operacional e a integração com o Supabase. O acesso ao painel é feito pelo Supabase Auth. Pedidos e cardápio são lidos do banco, e o estoque permite cadastrar ingredientes e atualizar seus saldos disponíveis.
 
 ## Tecnologias
 
@@ -20,10 +20,13 @@ O repositório contém a primeira versão da interface operacional e a base de i
 
 - Tela de login com e-mail e senha via Supabase Auth.
 - Restauração da sessão existente e encerramento de sessão.
+- Leitura de pedidos reais da tabela `public.orders`; uma base sem pedidos aparece vazia.
 - Leitura dos produtos ativos na tabela `public.products`, ordenados pelo nome.
+- Cadastro de ingredientes e quantidades disponíveis na tabela `public.ingredients`.
+- Atualização do saldo disponível de cada ingrediente.
 - Exibição de preços armazenados em centavos.
-- Navegação visual entre pedidos, cardápio e estoque.
-- Interface demonstrativa de pedidos e indicadores, sem persistência no banco.
+- As métricas fictícias e os pedidos de exemplo foram removidos.
+- As receitas ainda não estão relacionadas aos ingredientes; a baixa automática do estoque será implementada após o cadastro das quantidades por lanche.
 
 ## Estrutura do repositório
 
@@ -75,9 +78,9 @@ O repositório contém a primeira versão da interface operacional e a base de i
 
 ## Supabase e segurança
 
-O arquivo [`supabase/schema.sql`](supabase/schema.sql) define as tabelas `products`, `orders`, `order_items` e `ingredients`. Ele habilita RLS, remove as políticas anônimas legadas conhecidas e cria políticas para o papel `authenticated`. Também insere produtos iniciais no cardápio sem duplicar nomes existentes.
+O arquivo [`supabase/schema.sql`](supabase/schema.sql) define as tabelas `products`, `orders`, `order_items` e `ingredients`. Ele habilita RLS, remove as políticas anônimas legadas conhecidas e restringe leitura e escrita a usuários autenticados cuja claim `app_metadata.role` seja `admin`. Também insere os produtos iniciais do cardápio sem duplicar nomes existentes. A tabela de ingredientes não recebe registros iniciais, portanto o estoque começa vazio e deve ser preenchido com os itens e saldos reais. Depois de atualizar as políticas, execute o SQL no editor do Supabase e encerre/inicie a sessão do painel para renovar o token de acesso.
 
-O frontend usa somente a URL do projeto e a chave pública. A chave pública não substitui as políticas do banco: a proteção dos dados depende de RLS e das permissões configuradas no Supabase. O projeto não implementa cadastro de usuários na interface; crie ou convide a conta administrativa pelo painel do Supabase e mantenha o registro de usuários restrito a pessoas autorizadas.
+O frontend usa somente a URL do projeto e a chave pública. A chave pública não substitui as políticas do banco: a proteção dos dados depende de RLS e das permissões configuradas no Supabase. As políticas do esquema exigem que o usuário autenticado tenha a claim `app_metadata.role` definida como `admin`. Cadastre ou convide a conta no Supabase Auth e atribua essa claim administrativa pelo painel do Supabase; não use `user_metadata` para autorização, pois o próprio usuário pode alterar esse campo. O projeto não implementa cadastro de usuários na interface.
 
 ## Build e publicação no Render
 
@@ -98,4 +101,4 @@ O domínio `loshermanosprojeto.onrender.com` está permitido no servidor de dese
 
 ## Escopo atual e próximos passos
 
-As telas de pedidos, vendas e estoque ainda usam conteúdo demonstrativo. As ações exibidas nessas áreas não criam nem atualizam dados no banco. A integração seguinte deve conectar essas operações às tabelas correspondentes, com validação, estados de carregamento e tratamento de falhas. A integração com WhatsApp também permanece como objetivo futuro e depende da definição de um provedor e do fluxo de comunicação.
+Pedidos são exibidos a partir do banco, mas a criação e a alteração de pedidos ainda não estão disponíveis no painel. As métricas de vendas ainda não foram implementadas. O estoque permite cadastrar ingredientes e atualizar suas quantidades disponíveis; ele ainda não desconta ingredientes ao registrar vendas. Essa automação depende do mapeamento das receitas de cada lanche. A integração com WhatsApp permanece como objetivo futuro e depende da definição de um provedor e do fluxo de comunicação.

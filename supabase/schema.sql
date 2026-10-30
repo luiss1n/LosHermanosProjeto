@@ -38,8 +38,8 @@ create table if not exists public.ingredients (
   updated_at timestamptz not null default now()
 );
 
--- Admin-only access. Public visitors (anon role) receive no table policies.
--- Configure Supabase Auth users before using the dashboard.
+-- Admin-only access. Public visitors and authenticated non-admin users receive no table access.
+-- Assign app_metadata.role = 'admin' to authorized users in Supabase Auth.
 alter table public.products enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
@@ -59,7 +59,7 @@ drop policy if exists "pilot public ingredients update" on public.ingredients;
 do $$ declare t text; begin
   foreach t in array array['products','orders','order_items','ingredients'] loop
     execute format('drop policy if exists "authenticated admin access" on public.%I',t);
-    execute format('create policy "authenticated admin access" on public.%I for all to authenticated using (auth.uid() is not null) with check (auth.uid() is not null)',t);
+    execute format('create policy "authenticated admin access" on public.%I for all to authenticated using ((auth.jwt() -> ''app_metadata'' ->> ''role'') = ''admin'') with check ((auth.jwt() -> ''app_metadata'' ->> ''role'') = ''admin'')',t);
     execute format('revoke all on public.%I from anon',t);
     execute format('grant select, insert, update, delete on public.%I to authenticated',t);
   end loop;
