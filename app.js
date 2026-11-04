@@ -2,6 +2,7 @@ import {
   supabase,
   fetchProducts,
   fetchOrders,
+  fetchProductRecipes,
   fetchIngredients,
   createIngredient,
   updateIngredientStock,
@@ -10,6 +11,7 @@ import {
 const state = {
   orders: [],
   products: [],
+  recipes: [],
   ingredients: [],
   activeView: 'pedidos',
   authRequest: 0,
@@ -33,6 +35,81 @@ function showToast(message) {
 
 function formatDate(value) {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+}
+
+function money(cents) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
+}
+
+function createOrderLine(product) {
+  const recipe = state.recipes
+    .filter((row) => row.product_id === product.id && row.ingredients?.active)
+    .map((row) => ({
+      ingredient_id: row.ingredient_id,
+      name: row.ingredients.name,
+      unit: row.ingredients.unit,
+      base_quantity: Number(row.quantity),
+      quantity: Number(row.quantity),
+      extra_price_cents: Number(row.extra_price_cents ?? row.ingredients.extra_price_cents ?? 0),
+    }));
+  return {
+    key: crypto.randomUUID(),
+    product_id: product.id,
+    product_name: product.name,
+    base_price_cents: Number(product.base_price_cents ?? product.price_cents),
+    ingredients: recipe,
+  };
+}
+
+function lineTotal(line) {
+  return line.base_price_cents + line.ingredients.reduce((sum, ingredient) => {
+    const changed = ingredient.quantity - ingredient.base_quantity;
+    return sum + Math.max(0, changed) * ingredient.extra_price_cents;
+  }, 0);
+}
+
+function renderOrderDialog() {
+  const select = $('#order-product');
+  const previousValue = select.value;
+  select.innerHTML = '<option value="">Selecione um lanche</option>' + state.products
+    .map((product) => `<option value="${escapeHtml(product.id)}">${escapeHtml(product.name)} · ${money(Number(product.base_price_cents ?? product.price_cents))}</option>`)
+    .join('');
+  if (state.products.some((product) => product.id === previousValue)) select.value = previousValue;
+
+  const host = $('#order-lines');
+  if (!state.orderDraft.length) {
+    host.innerHTML = '<div class="empty-state">Adicione um lanche para começar o pedido.</div>';
+  } else {
+    host.innerHTML = state.orderDraft.map((line) => `<article class="order-line" data-line="${escapeHtml(line.key)}">
+      <header class="order-line-header"><div><strong>${escapeHtml(line.product_name)}</strong><small>Preço base: ${money(line.base_price_cents)}</small></div><button class="remove-line" type="button" data-remove-line="${escapeHtml(line.key)}">Remover lanche</button></header>
+      <div class="recipe-list">${line.ingredients.length ? line.ingredients.map((ingredient) => `<div class="recipe-row" data-ingredient="${escapeHtml(ingredient.ingredient_id)}">
+        <div><strong>${escapeHtml(ingredient.name)}</strong><small>Base: ${formatQuantity(ingredient.base_quantity)} ${escapeHtml(ingredient.unit)}${ingredient.extra_price_cents ? ` · Adicional ${money(ingredient.extra_price_cents)} por unidade` : ''}</small></div>
+        <div class="quantity-control"><button type="button" data-quantity="-1" aria-label="Remover ${escapeHtml(ingredient.name)}">−</button><output>${formatQuantity(ingredient.quantity)}</output><button type="button" data-quantity="1" aria-label="Adicionar ${escapeHtml(ingredient.name)}">＋</button></div>
+      </div>`).join('') : '<p class="recipe-empty">Receita ainda não cadastrada para este lanche.</p>'}</div>
+      <footer>Subtotal do lanche <strong>${money(lineTotal(line))}</strong></footer>
+    </article>`).join('');
+  }
+  $('#order-total').textContent = money(state.orderDraft.reduce((sum, line) => sum + lineTotal(line), 0));
+}
+
+function openOrderDialog() {
+  if (!state.products.length) {
+    showToast('Cadastre produtos ativos no cardápio antes de criar pedidos.');
+    return;
+  }
+  state.orderDraft = [];
+  $('#order-form').reset();
+  $('#order-feedback').textContent = '';
+  renderOrderDialog();
+  $('#order-dialog').hidden = false;
+  document.body.classList.add('dialog-open');
+  requestAnimationFrame(() => $('#order-customer').focus());
+}
+
+function closeOrderDialog() {
+  $('#order-dialog').hidden = true;
+  document.body.classList.remove('dialog-open');
+  $('#new-order').focus();
 }
 
 function renderOrders() {
@@ -72,7 +149,7 @@ function renderProducts() {
     ? state.products.map((product, index) => `<div class="menu-item">
         <span class="menu-number">${String(index + 1).padStart(2, '0')}</span>
         <strong>${escapeHtml(product.name)}</strong>
-        <b>${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.price_cents / 100)}</b>
+        <b>${money(Number(product.base_price_cents ?? product.price_cents))}</b>
       </div>`).join('')
     : '<div class="empty-state">Nenhum produto ativo cadastrado.</div>';
   section.innerHTML = `<h2>Cardápio</h2><p>Produtos ativos cadastrados no Supabase.</p><div class="menu-grid">${content}</div>`;
@@ -161,10 +238,24 @@ async function refreshProducts() {
     const { data, error } = await fetchProducts();
     if (error) throw error;
     state.products = data || [];
+    if (state.products.length && !state.recipesLoaded) await refreshRecipes();
     if (state.activeView === 'cardapio') showView('cardapio');
   } catch {
     state.products = [];
     showToast('Falha ao carregar o cardápio.');
+  }
+}
+
+async function refreshRecipes() {
+  try {
+    const { data, error } = await fetchProductRecipes();
+    if (error) throw error;
+    state.recipes = data || [];
+    state.recipesLoaded = true;
+  } catch {
+    state.recipes = [];
+    state.recipesLoaded = false;
+    showToast('Não foi possível carregar as receitas.');
   }
 }
 
@@ -290,6 +381,102 @@ $('#ingredient-list').addEventListener('submit', async (event) => {
   }
   await refreshIngredients();
   showToast('Quantidade disponível atualizada.');
+});
+
+$('#new-order').addEventListener('click', openOrderDialog);
+$('#new-order-panel').addEventListener('click', openOrderDialog);
+$('#close-order-dialog').addEventListener('click', closeOrderDialog);
+$('#cancel-order').addEventListener('click', closeOrderDialog);
+$('#order-dialog').addEventListener('click', (event) => {
+  if (event.target === $('#order-dialog')) closeOrderDialog();
+});
+$('#add-product').addEventListener('click', () => {
+  const product = state.products.find((item) => item.id === $('#order-product').value);
+  if (!product) {
+    $('#order-feedback').textContent = 'Selecione um lanche do cardápio.';
+    return;
+  }
+  $('#order-feedback').textContent = '';
+  if (state.orderDraft.length >= 20) {
+    $('#order-feedback').textContent = 'O pedido pode conter até 20 lanches.';
+    return;
+  }
+  state.orderDraft.push(createOrderLine(product));
+  renderOrderDialog();
+});
+$('#order-lines').addEventListener('click', (event) => {
+  const removeButton = event.target.closest('[data-remove-line]');
+  if (removeButton) {
+    state.orderDraft = state.orderDraft.filter((line) => line.key !== removeButton.dataset.removeLine);
+    renderOrderDialog();
+    return;
+  }
+
+  const quantityButton = event.target.closest('[data-quantity]');
+  if (!quantityButton) return;
+  const row = quantityButton.closest('[data-ingredient]');
+  const lineElement = quantityButton.closest('[data-line]');
+  const line = state.orderDraft.find((item) => item.key === lineElement.dataset.line);
+  const ingredient = line?.ingredients.find((item) => item.ingredient_id === row.dataset.ingredient);
+  if (!ingredient) return;
+  ingredient.quantity = Math.max(0, Number((ingredient.quantity + Number(quantityButton.dataset.quantity)).toFixed(3)));
+  renderOrderDialog();
+});
+  $('#order-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const feedback = $('#order-feedback');
+  const button = form.querySelector('[type="submit"]');
+  feedback.textContent = '';
+  const customerName = form.elements.customer_name.value.trim();
+  if (!customerName) {
+    feedback.textContent = 'Informe o nome do cliente.';
+    form.elements.customer_name.focus();
+    return;
+  }
+  if (!state.orderDraft.length) {
+    feedback.textContent = 'Adicione pelo menos um lanche ao pedido.';
+    return;
+  }
+  if (state.orderDraft.some((line) => !line.ingredients.length)) {
+    feedback.textContent = 'Cadastre a receita de cada lanche selecionado antes de salvar o pedido.';
+    return;
+  }
+
+  if (!state.orderDraft.every((line) => line.ingredients.every((ingredient) => Number.isFinite(ingredient.quantity) && ingredient.quantity >= 0))) {
+    feedback.textContent = 'Confira as quantidades dos ingredientes antes de salvar.';
+    return;
+  }
+
+  const items = state.orderDraft.map((line) => ({
+    product_id: line.product_id,
+    product_name: line.product_name,
+    quantity: 1,
+    unit_price_cents: lineTotal(line),
+    customizations: {
+      ingredients: line.ingredients.map(({ ingredient_id, name, unit, quantity }) => ({ ingredient_id, name, unit, quantity })),
+    },
+  }));
+  button.textContent = 'Salvando…';
+  try {
+    const { data, error } = await createOrder({
+      customer_name: customerName,
+      source: form.elements.source.value,
+      notes: form.elements.notes.value.trim(),
+      items,
+    });
+    if (error) throw error;
+    closeOrderDialog();
+    await refreshOrders();
+    showToast(`Pedido #${data} salvo.`);
+  } catch {
+    feedback.textContent = 'Não foi possível salvar o pedido. Verifique a conexão, as receitas e as permissões do Supabase.';
+  } finally {
+    button.textContent = 'Salvar pedido';
+  }
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !$('#order-dialog').hidden) closeOrderDialog();
 });
 
 document.querySelectorAll('.nav-item').forEach((button) => {

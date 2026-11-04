@@ -4,9 +4,13 @@ create table if not exists public.products (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
   price_cents integer not null check (price_cents >= 0),
+  base_price_cents integer not null default 0 check (base_price_cents >= 0),
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+alter table public.products add column if not exists base_price_cents integer not null default 0 check (base_price_cents >= 0);
+update public.products set base_price_cents = price_cents where base_price_cents = 0 and price_cents > 0;
 
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
@@ -34,8 +38,19 @@ create table if not exists public.ingredients (
   name text not null unique,
   unit text not null,
   stock_quantity numeric(12,3) not null default 0 check (stock_quantity >= 0),
+  extra_price_cents integer not null default 0 check (extra_price_cents >= 0),
   active boolean not null default true,
   updated_at timestamptz not null default now()
+);
+
+alter table public.ingredients add column if not exists extra_price_cents integer not null default 0 check (extra_price_cents >= 0);
+
+create table if not exists public.product_ingredients (
+  product_id uuid not null references public.products(id) on delete cascade,
+  ingredient_id uuid not null references public.ingredients(id) on delete cascade,
+  quantity numeric(12,3) not null check (quantity > 0),
+  extra_price_cents integer not null default 0 check (extra_price_cents >= 0),
+  primary key (product_id, ingredient_id)
 );
 
 -- Admin-only access. Public visitors and authenticated non-admin users receive no table access.
@@ -44,6 +59,7 @@ alter table public.products enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.ingredients enable row level security;
+alter table public.product_ingredients enable row level security;
 
 drop policy if exists "pilot public products read" on public.products;
 drop policy if exists "pilot public products add" on public.products;
@@ -57,13 +73,58 @@ drop policy if exists "pilot public ingredients add" on public.ingredients;
 drop policy if exists "pilot public ingredients update" on public.ingredients;
 
 do $$ declare t text; begin
-  foreach t in array array['products','orders','order_items','ingredients'] loop
+  foreach t in array array['products','orders','order_items','ingredients','product_ingredients'] loop
     execute format('drop policy if exists "authenticated admin access" on public.%I',t);
     execute format('create policy "authenticated admin access" on public.%I for all to authenticated using ((auth.jwt() -> ''app_metadata'' ->> ''role'') = ''admin'') with check ((auth.jwt() -> ''app_metadata'' ->> ''role'') = ''admin'')',t);
     execute format('revoke all on public.%I from anon',t);
     execute format('grant select, insert, update, delete on public.%I to authenticated',t);
   end loop;
 end $$;
+
+create or replace function public.create_order_with_items(
+  p_customer_name text,
+  p_source text,
+  p_notes text,
+  p_items jsonb
+) returns uuid
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  created_order_id uuid;
+  created_order_number bigint;
+  item jsonb;
+begin
+  if (auth.jwt() -> 'app_metadata' ->> 'role') is distinct from 'admin' then
+    raise exception 'Acesso administrativo necessário.' using errcode = '42501';
+  end if;
+  if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
+    raise exception 'O pedido deve conter ao menos um item.' using errcode = '22023';
+  end if;
+
+  insert into public.orders(customer_name, source, notes)
+  values (trim(p_customer_name), p_source, coalesce(p_notes, ''))
+  returning id, order_number into created_order_id, created_order_number;
+
+  for item in select value from jsonb_array_elements(p_items)
+  loop
+    insert into public.order_items(order_id, product_id, product_name, quantity, unit_price_cents, customizations)
+    values (
+      created_order_id,
+      (item ->> 'product_id')::uuid,
+      item ->> 'product_name',
+      (item ->> 'quantity')::integer,
+      (item ->> 'unit_price_cents')::integer,
+      coalesce(item -> 'customizations', '{}'::jsonb)
+    );
+  end loop;
+
+  return created_order_number;
+end;
+$$;
+revoke all on function public.create_order_with_items(text,text,text,jsonb) from public, anon;
+grant execute on function public.create_order_with_items(text,text,text,jsonb) to authenticated;
 
 insert into public.products(name,price_cents) values
  ('Misto Quente',1000),('Hambúrguer',1200),('Americano',1300),('X-Burguer',1400),

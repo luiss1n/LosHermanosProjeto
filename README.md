@@ -22,6 +22,8 @@ O repositório contém a primeira versão da interface operacional e a integraç
 - Restauração da sessão existente e encerramento de sessão.
 - Leitura de pedidos reais da tabela `public.orders`; uma base sem pedidos aparece vazia.
 - Leitura dos produtos ativos na tabela `public.products`, ordenados pelo nome.
+- Criação de pedidos com cliente, origem, lanches e observações.
+- Personalização das quantidades de ingredientes por lanche, com recálculo do total.
 - Cadastro de ingredientes e quantidades disponíveis na tabela `public.ingredients`.
 - Atualização do saldo disponível de cada ingrediente.
 - Exibição de preços armazenados em centavos.
@@ -101,4 +103,4 @@ O domínio `loshermanosprojeto.onrender.com` está permitido no servidor de dese
 
 ## Escopo atual e próximos passos
 
-Pedidos são exibidos a partir do banco, mas a criação e a alteração de pedidos ainda não estão disponíveis no painel. As métricas de vendas ainda não foram implementadas. O estoque permite cadastrar ingredientes e atualizar suas quantidades disponíveis; ele ainda não desconta ingredientes ao registrar vendas. Essa automação depende do mapeamento das receitas de cada lanche. A integração com WhatsApp permanece como objetivo futuro e depende da definição de um provedor e do fluxo de comunicação.
+Pedidos são exibidos e podem ser criados a partir do painel. Para habilitar um lanche no novo pedido, cadastre sua composição na tabela `product_ingredients`, informando a quantidade base de cada ingrediente. Os preços adicionais começam em zero e precisam ser configurados com os valores reais antes de cobrar extras. A função `create_order_with_items` grava o pedido e os itens em uma única transação. As métricas de vendas ainda não foram implementadas. O estoque permite cadastrar ingredientes e atualizar seus saldos, mas não desconta ingredientes ao registrar vendas. A baixa automática depende do mapeamento das receitas de cada lanche. A integração com WhatsApp permanece como objetivo futuro.

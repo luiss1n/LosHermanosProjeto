@@ -45,9 +45,9 @@
   </aside>
   <main class="main" id="inicio">
     <header class="topbar"><button class="mobile-menu" id="mobile-menu" aria-label="Abrir menu">☰</button><div class="breadcrumb">Painel <span>/</span> <b id="crumb">Pedidos</b></div><div class="top-actions"><span class="today" id="today"></span><div class="top-avatar" aria-label="LOS HERMANOS">LH</div></div></header>
-    <section class="page-heading"><div><div class="eyebrow">OPERAÇÃO</div><h1 id="page-title">Pedidos <span class="yellow-period">.</span></h1><p id="page-subtitle">Pedidos registrados no sistema.</p></div></section>
+    <section class="page-heading"><div><div class="eyebrow">OPERAÇÃO</div><h1 id="page-title">Pedidos <span class="yellow-period">.</span></h1><p id="page-subtitle">Pedidos registrados no sistema.</p></div><button class="primary-button" id="new-order"><span>＋</span> Novo pedido</button></section>
     <section class="orders-panel" id="orders-panel">
-      <div class="panel-head"><div><h2>Pedidos</h2><p>Pedidos registrados no Supabase</p></div></div>
+      <div class="panel-head"><div><h2>Pedidos</h2><p>Pedidos registrados no Supabase</p></div><button class="primary-button panel-new-order" id="new-order-panel" type="button">＋ Novo pedido</button></div>
       <div class="order-list" id="order-list"></div>
       <div class="panel-footer"><span><b id="visible-count">0</b> pedidos</span></div>
     </section>
@@ -69,6 +69,23 @@
     </section>
     <footer class="footer"><span>LOS HERMANOS <b>·</b> FEITO PARA A CORRERIA</span><span>PAINEL DE OPERAÇÃO <i></i> VERSÃO 0.1</span></footer>
   </main>
+  <div class="dialog-backdrop" id="order-dialog" hidden>
+    <section class="order-dialog" role="dialog" aria-modal="true" aria-labelledby="order-dialog-title" aria-describedby="order-dialog-description">
+      <div class="dialog-header"><div><p class="eyebrow">NOVO REGISTRO</p><h2 id="order-dialog-title">Adicionar pedido</h2><p id="order-dialog-description">Escolha os lanches e ajuste os ingredientes deste pedido.</p></div><button class="dialog-close" id="close-order-dialog" type="button" aria-label="Fechar">×</button></div>
+      <form id="order-form" novalidate>
+        <div class="order-fields">
+          <div class="stock-field"><label for="order-customer">Nome do cliente</label><input id="order-customer" name="customer_name" type="text" maxlength="120" required autocomplete="name" /></div>
+          <div class="stock-field"><label for="order-source">Origem do pedido</label><select id="order-source" name="source"><option value="balcao">Balcão</option><option value="whatsapp">WhatsApp</option></select></div>
+        </div>
+        <div class="product-picker"><label for="order-product">Lanche</label><div class="picker-row"><select id="order-product" aria-describedby="product-picker-help"><option value="">Selecione um lanche</option></select><button class="secondary-button" id="add-product" type="button">Adicionar lanche</button></div><small id="product-picker-help">A lista vem dos produtos ativos do cardápio.</small></div>
+        <div class="order-lines" id="order-lines"><div class="empty-state">Adicione um lanche para começar o pedido.</div></div>
+        <div class="stock-field order-notes"><label for="order-notes">Observações do pedido</label><textarea id="order-notes" name="notes" rows="2" maxlength="500"></textarea></div>
+        <div class="order-total-row"><span>Total do pedido</span><strong id="order-total">R$ 0,00</strong></div>
+        <p class="form-feedback" id="order-feedback" role="alert" aria-live="polite"></p>
+        <div class="dialog-actions"><button class="secondary-button" id="cancel-order" type="button">Cancelar</button><button class="primary-button" type="submit">Salvar pedido</button></div>
+      </form>
+    </section>
+  </div>
   <div class="toast" id="toast" role="status"></div>
   <script type="module" src="app.js"></script>
 </body>
