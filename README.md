@@ -41,7 +41,8 @@ O repositório contém a primeira versão da interface operacional e a integraç
 ├── vite.config.js         # Configuração do servidor e preview do Vite
 ├── render.yaml            # Configuração de build e publicação no Render
 ├── supabase/
-│   └── schema.sql         # Tabelas, políticas RLS e dados iniciais do cardápio
+│   ├── schema.sql         # Tabelas, políticas RLS e estrutura do banco
+│   └── seed_menu_recipes.sql # Produtos, ingredientes e receitas do cardápio
 └── assets/
     └── logo.png           # Marca utilizada no painel
 ```
@@ -80,7 +81,9 @@ O repositório contém a primeira versão da interface operacional e a integraç
 
 ## Supabase e segurança
 
-O arquivo [`supabase/schema.sql`](supabase/schema.sql) define as tabelas `products`, `orders`, `order_items` e `ingredients`. Ele habilita RLS, remove as políticas anônimas legadas conhecidas e restringe leitura e escrita a usuários autenticados cuja claim `app_metadata.role` seja `admin`. Também insere os produtos iniciais do cardápio sem duplicar nomes existentes. A tabela de ingredientes não recebe registros iniciais, portanto o estoque começa vazio e deve ser preenchido com os itens e saldos reais. Depois de atualizar as políticas, atribua a claim administrativa pelo Supabase Auth e encerre/inicie a sessão do painel para renovar o token de acesso.
+O arquivo [`supabase/schema.sql`](supabase/schema.sql) define as tabelas `products`, `orders`, `order_items`, `ingredients` e `product_ingredients`. Ele habilita RLS, remove as políticas anônimas legadas conhecidas e restringe leitura e escrita a usuários autenticados cuja claim `app_metadata.role` seja `admin`. O estoque começa com quantidade zero.
+
+O arquivo [`supabase/seed_menu_recipes.sql`](supabase/seed_menu_recipes.sql) sincroniza os 18 produtos, ingredientes e composição de cada lanche conforme o cardápio recebido. Por não haver gramaturas na imagem, cada ingrediente listado recebe quantidade-base 1; “muçarela dupla” recebe 2 fatias. Os valores de adicionais começam em zero porque o cardápio não informa preços de acréscimo. O script pode ser executado novamente sem zerar saldos de estoque existentes.
 
 O frontend usa somente a URL do projeto e a chave pública. A chave pública não substitui as políticas do banco: a proteção dos dados depende de RLS e das permissões configuradas no Supabase. As políticas do esquema exigem que o usuário autenticado tenha a claim `app_metadata.role` definida como `admin`. Cadastre ou convide a conta no Supabase Auth e atribua essa claim administrativa pelo painel do Supabase; não use `user_metadata` para autorização, pois o próprio usuário pode alterar esse campo. O projeto não implementa cadastro de usuários na interface.
 
