@@ -86,7 +86,7 @@ create or replace function public.create_order_with_items(
   p_source text,
   p_notes text,
   p_items jsonb
-) returns uuid
+) returns bigint
 language plpgsql
 security invoker
 set search_path = ''
@@ -126,10 +126,10 @@ $$;
 revoke all on function public.create_order_with_items(text,text,text,jsonb) from public, anon;
 grant execute on function public.create_order_with_items(text,text,text,jsonb) to authenticated;
 
-insert into public.products(name,price_cents) values
- ('Misto Quente',1000),('Hambúrguer',1200),('Americano',1300),('X-Burguer',1400),
- ('Egg-Burguer',1600),('X-Salada',1500),('Egg-Salada',1650),('X-Especial',1600),
- ('Egg-Especial',1700),('X-Frango',1800),('Egg-Frango',1900),('X-Vegetariano',1600),
- ('X-Calabresa',1900),('Egg-Calabresa',2000),('X-Bacon',1900),('Egg-Bacon',2000),
- ('X-Bacon Cheddar',2100),('X-Tudo',2400)
+insert into public.products(name,price_cents,base_price_cents) values
+ ('Misto Quente',1000,1000),('Hambúrguer',1200,1200),('Americano',1300,1300),('X-Burguer',1400,1400),
+ ('Egg-Burguer',1600,1600),('X-Salada',1500,1500),('Egg-Salada',1650,1650),('X-Especial',1600,1600),
+ ('Egg-Especial',1700,1700),('X-Frango',1800,1800),('Egg-Frango',1900,1900),('X-Vegetariano',1600,1600),
+ ('X-Calabresa',1900,1900),('Egg-Calabresa',2000,2000),('X-Bacon',1900,1900),('Egg-Bacon',2000,2000),
+ ('X-Bacon Cheddar',2100,2100),('X-Tudo',2400,2400)
 on conflict(name) do nothing;

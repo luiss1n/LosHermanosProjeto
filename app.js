@@ -14,6 +14,8 @@ const state = {
   recipes: [],
   ingredients: [],
   activeView: 'pedidos',
+  isAdmin: false,
+  adminAccess: null,
   authRequest: 0,
   toastTimer: undefined,
 };
@@ -117,6 +119,10 @@ function renderOrders() {
   $('#nav-count').textContent = state.orders.length;
   $('#visible-count').textContent = state.orders.length;
 
+  if (!state.isAdmin) {
+    list.innerHTML = '<div class="empty-state">A conta conectada não tem permissão de administrador. Atualize app_metadata.role para admin no Supabase Auth e entre novamente.</div>';
+    return;
+  }
   if (!state.orders.length) {
     list.innerHTML = '<div class="empty-state">Nenhum pedido cadastrado.</div>';
     return;
@@ -145,7 +151,9 @@ function renderOrders() {
 function renderProducts() {
   const section = document.createElement('section');
   section.className = 'section-placeholder';
-  const content = state.products.length
+  const content = !state.isAdmin
+    ? '<div class="empty-state">O acesso ao cardápio foi bloqueado pelas políticas do banco. Confirme app_metadata.role = admin na conta e entre novamente.</div>'
+    : state.products.length
     ? state.products.map((product, index) => `<div class="menu-item">
         <span class="menu-number">${String(index + 1).padStart(2, '0')}</span>
         <strong>${escapeHtml(product.name)}</strong>
@@ -158,6 +166,10 @@ function renderProducts() {
 
 function renderIngredients() {
   const list = $('#ingredient-list');
+  if (!state.isAdmin) {
+    list.innerHTML = '<tr><td class="table-empty" colspan="3">A conta conectada não tem permissão de administrador. Atualize app_metadata.role para admin no Supabase Auth e entre novamente.</td></tr>';
+    return;
+  }
   if (!state.ingredients.length) {
     list.innerHTML = '<tr><td class="table-empty" colspan="3">Nenhum ingrediente cadastrado. Adicione os ingredientes e informe a quantidade disponível.</td></tr>';
     return;
@@ -217,8 +229,16 @@ function showDashboard(user) {
   $('#sidebar').hidden = false;
   $('.main').hidden = false;
   $('#profile-email').textContent = user.email || 'Administrador';
-  $('#connection-title').textContent = 'Sessão autenticada';
-  $('#connection-detail').textContent = 'Supabase conectado';
+  state.isAdmin = user.app_metadata?.role === 'admin';
+  $('#connection-title').textContent = state.isAdmin ? 'Acesso administrativo' : 'Permissão pendente';
+  $('#connection-detail').textContent = state.isAdmin ? 'Supabase conectado' : 'Conta sem função admin';
+  if (!state.isAdmin) {
+    state.orders = [];
+    state.products = [];
+    state.ingredients = [];
+    renderOrders();
+    if (state.activeView === 'estoque') renderIngredients();
+  }
 }
 
 async function refreshOrders() {
@@ -272,6 +292,7 @@ async function refreshIngredients() {
 }
 
 async function refreshDashboardData() {
+  if (!state.isAdmin) return;
   await Promise.all([refreshOrders(), refreshProducts(), refreshIngredients()]);
 }
 
