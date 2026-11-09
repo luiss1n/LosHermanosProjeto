@@ -81,7 +81,10 @@ do $$ declare t text; begin
   end loop;
 end $$;
 
-create or replace function public.create_order_with_items(
+-- PostgreSQL não permite alterar o tipo de retorno com CREATE OR REPLACE.
+-- Remova a assinatura antiga (que retornava o UUID) antes da nova versão bigint.
+drop function if exists public.create_order_with_items(text,text,text,jsonb);
+create function public.create_order_with_items(
   p_customer_name text,
   p_source text,
   p_notes text,

@@ -43,6 +43,10 @@ function money(cents) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
 }
 
+function formatQuantity(value) {
+  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(Number(value) || 0);
+}
+
 function createOrderLine(product) {
   const recipe = state.recipes
     .filter((row) => row.product_id === product.id && row.ingredients?.active)
@@ -96,7 +100,9 @@ function renderOrderDialog() {
 
 function openOrderDialog() {
   if (!state.products.length) {
-    showToast('Cadastre produtos ativos no cardápio antes de criar pedidos.');
+    showToast(state.isAdmin
+      ? 'Nenhum lanche disponível. Verifique o cardápio e atualize a página.'
+      : 'A conta conectada ainda não tem acesso de administrador.');
     return;
   }
   state.orderDraft = [];
@@ -420,6 +426,10 @@ $('#add-product').addEventListener('click', () => {
   $('#order-feedback').textContent = '';
   if (state.orderDraft.length >= 20) {
     $('#order-feedback').textContent = 'O pedido pode conter até 20 lanches.';
+    return;
+  }
+  if (!state.recipesLoaded) {
+    $('#order-feedback').textContent = 'As receitas ainda não carregaram. Atualize a página e tente novamente.';
     return;
   }
   state.orderDraft.push(createOrderLine(product));
